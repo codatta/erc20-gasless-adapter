@@ -1,1 +1,1 @@
-forge script script/Wrapper.s.sol:WrapperDeploy --rpc-url https://sepolia.base.org --broadcast
+forge script script/XNYAdapter.s.sol:XNYAdapterDeploy --rpc-url https://sepolia.base.org --broadcast

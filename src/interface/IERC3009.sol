@@ -4,10 +4,7 @@ pragma solidity ^0.8.13;
 
 interface IERC3009 {
     event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce);
-    event AuthorizationCanceled(
-        address indexed authorizer,
-        bytes32 indexed nonce
-    );
+    event AuthorizationCanceled(address indexed authorizer, bytes32 indexed nonce);
 
     /**
      * @notice Returns the state of an authorization
@@ -17,10 +14,7 @@ interface IERC3009 {
      * @param nonce         Nonce of the authorization
      * @return True if the nonce is used
      */
-    function authorizationState(
-        address authorizer,
-        bytes32 nonce
-    ) external view returns (bool);
+    function authorizationState(address authorizer, bytes32 nonce) external view returns (bool);
 
     /**
      * @notice Execute a transfer with a signed authorization
@@ -81,11 +75,5 @@ interface IERC3009 {
      * @param r             r of the signature
      * @param s             s of the signature
      */
-    function cancelAuthorization(
-        address authorizer,
-        bytes32 nonce,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
+    function cancelAuthorization(address authorizer, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;
 }

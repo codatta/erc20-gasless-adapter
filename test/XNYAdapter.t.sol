@@ -25,19 +25,19 @@ contract WrapperTest is Test {
     event Unpaused(address account);
 
     function setUp() public {
-        // 部署 Mock ERC20 代币
+        // Deploy Mock ERC20 token
         mockToken = new MockERC20("Test Token", "TEST");
 
-        // 部署 XNYAdapter 合约
+        // Deploy XNYAdapter contract
         vm.prank(owner);
         wrapper = new XNYAdapter(TOKEN_NAME, TOKEN_VERSION, address(mockToken), owner);
 
-        // 给用户一些代币
+        // Give users some tokens
         mockToken.mint(user1, 1000 * 10 ** 18);
         mockToken.mint(user2, 1000 * 10 ** 18);
     }
 
-    // ============ 部署测试 ============
+    // ============ Deployment Tests ============
 
     function test_Deployment() public view {
         assertEq(wrapper.realToken(), address(mockToken));
@@ -48,16 +48,16 @@ contract WrapperTest is Test {
         assertEq(wrapper.decimals(), 18);
     }
 
-    // ============ Transfer 测试 ============
+    // ============ Transfer Tests ============
 
     function test_Transfer_Success() public {
         uint256 amount = 100 * 10 ** 18;
 
-        // user1 授权给 wrapper
+        // user1 approves wrapper
         vm.prank(user1);
         mockToken.approve(address(wrapper), amount);
 
-        // user1 转账给 user2
+        // user1 transfers to user2
         vm.prank(user1);
         bool success = wrapper.transfer(user2, amount);
 
@@ -68,7 +68,7 @@ contract WrapperTest is Test {
     function test_Transfer_InsufficientAllowance() public {
         uint256 amount = 100 * 10 ** 18;
 
-        // user1 没有授权
+        // user1 has not approved
         vm.prank(user1);
         vm.expectRevert(
             abi.encodeWithSelector(GaslessAdapterBase.UnderlyingInsufficientAllowance.selector, user1, 0, amount)
@@ -79,34 +79,34 @@ contract WrapperTest is Test {
     function test_Transfer_WhenPaused() public {
         uint256 amount = 100 * 10 ** 18;
 
-        // user1 授权
+        // user1 approves
         vm.prank(user1);
         mockToken.approve(address(wrapper), amount);
 
-        // owner 暂停合约
+        // owner pauses contract
         vm.prank(owner);
         wrapper.pause();
 
-        // 尝试转账应该失败
+        // transfer should fail
         vm.prank(user1);
         vm.expectRevert();
         assertFalse(wrapper.transfer(user2, amount), "Transfer should revert when paused");
     }
 
-    // ============ TransferFrom 测试 ============
+    // ============ TransferFrom Tests ============
 
     function test_TransferFrom_Success() public {
         uint256 amount = 100 * 10 ** 18;
 
-        // user1 授权给 spender
+        // user1 approves spender
         vm.prank(user1);
         wrapper.approve(spender, amount);
 
-        // user1 授权底层代币给 wrapper
+        // user1 approves underlying token to wrapper
         vm.prank(user1);
         mockToken.approve(address(wrapper), amount);
 
-        // spender 代表 user1 转账
+        // spender transfers on behalf of user1
         vm.prank(spender);
         bool success = wrapper.transferFrom(user1, user2, amount);
 
@@ -118,7 +118,7 @@ contract WrapperTest is Test {
     function test_TransferFrom_InsufficientAllowance() public {
         uint256 amount = 100 * 10 ** 18;
 
-        // user1 没有授权给 spender
+        // user1 has not approved spender
         vm.prank(spender);
         vm.expectRevert(
             abi.encodeWithSelector(GaslessAdapterBase.ERC20InsufficientAllowance.selector, spender, 0, amount)
@@ -126,7 +126,7 @@ contract WrapperTest is Test {
         assertFalse(wrapper.transferFrom(user1, user2, amount), "TransferFrom should revert");
     }
 
-    // ============ Approve 测试 ============
+    // ============ Approve Tests ============
 
     function test_Approve_Success() public {
         uint256 amount = 100 * 10 ** 18;
@@ -144,7 +144,7 @@ contract WrapperTest is Test {
         wrapper.approve(address(0), 100 * 10 ** 18);
     }
 
-    // ============ Permit 测试 ============
+    // ============ Permit Tests ============
 
     function test_Permit_Success() public {
         uint256 amount = 100 * 10 ** 18;
@@ -175,7 +175,7 @@ contract WrapperTest is Test {
 
     function test_Permit_ExpiredDeadline() public {
         uint256 amount = 100 * 10 ** 18;
-        uint256 deadline = block.timestamp - 1; // 已过期
+        uint256 deadline = block.timestamp - 1; // expired
         uint256 nonce = wrapper.nonces(user1);
 
         bytes32 structHash = keccak256(
@@ -198,19 +198,19 @@ contract WrapperTest is Test {
         wrapper.permit(user1, spender, amount, deadline, v, r, s);
     }
 
-    // ============ EIP-3009 TransferWithAuthorization 测试 ============
+    // ============ EIP-3009 TransferWithAuthorization Tests ============
 
     function test_TransferWithAuthorization_Success() public {
         uint256 amount = 100 * 10 ** 18;
-        uint256 validAfter = block.timestamp - 1; // 确保已经生效
+        uint256 validAfter = block.timestamp - 1; // ensure it's already valid
         uint256 validBefore = block.timestamp + 1 days;
         bytes32 nonce = keccak256("unique-nonce-1");
 
-        // user1 授权底层代币给 wrapper
+        // user1 approves underlying token to wrapper
         vm.prank(user1);
         mockToken.approve(address(wrapper), amount);
 
-        // 创建授权签名
+        // create authorization signature
         bytes32 structHash = keccak256(
             abi.encode(
                 wrapper.TRANSFER_WITH_AUTHORIZATION_TYPEHASH(), user1, user2, amount, validAfter, validBefore, nonce
@@ -222,7 +222,7 @@ contract WrapperTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(user1PrivateKey, digest);
 
-        // 执行授权转账
+        // execute authorized transfer
         wrapper.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
 
         assertTrue(wrapper.authorizationState(user1, nonce));
@@ -231,7 +231,7 @@ contract WrapperTest is Test {
 
     function test_TransferWithAuthorization_ReuseNonce() public {
         uint256 amount = 100 * 10 ** 18;
-        uint256 validAfter = block.timestamp - 1; // 确保已经生效
+        uint256 validAfter = block.timestamp - 1; // ensure it's already valid
         uint256 validBefore = block.timestamp + 1 days;
         bytes32 nonce = keccak256("unique-nonce-2");
 
@@ -249,15 +249,15 @@ contract WrapperTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(user1PrivateKey, digest);
 
-        // 第一次使用应该成功
+        // first use should succeed
         wrapper.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
 
-        // 第二次使用相同 nonce 应该失败
+        // second use with same nonce should fail
         vm.expectRevert("ERC3009: authorization is used or canceled");
         wrapper.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
     }
 
-    // ============ Pause/Unpause 测试 ============
+    // ============ Pause/Unpause Tests ============
 
     function test_Pause_OnlyOwner() public {
         vm.prank(owner);
@@ -293,7 +293,7 @@ contract WrapperTest is Test {
         wrapper.unpause();
     }
 
-    // ============ View 函数测试 ============
+    // ============ View Function Tests ============
 
     function test_BalanceOf() public view {
         assertEq(wrapper.balanceOf(user1), 1000 * 10 ** 18);
