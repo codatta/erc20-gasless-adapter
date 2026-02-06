@@ -2,13 +2,13 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
-import {XNYAdapter} from "../src/XNYAdapter.sol";
+import {StandardGaslessAdapter} from "../src/StandardGaslessAdapter.sol";
 import {GaslessAdapterBase} from "../src/GaslessAdapterBase.sol";
 import {ERC2612} from "../src/ERC2612.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
-contract WrapperTest is Test {
-    XNYAdapter public wrapper;
+contract StandardGaslessAdapterTest is Test {
+    StandardGaslessAdapter public adapter;
     MockERC20 public mockToken;
 
     address public owner = address(0x1);
@@ -28,11 +28,11 @@ contract WrapperTest is Test {
         // Deploy Mock ERC20 token
         mockToken = new MockERC20("Test Token", "TEST");
 
-        // Deploy XNYAdapter contract
+        // Deploy StandardGaslessAdapter contract
         vm.prank(owner);
-        wrapper = new XNYAdapter(TOKEN_NAME, TOKEN_VERSION, address(mockToken), owner);
+        adapter = new StandardGaslessAdapter(TOKEN_NAME, TOKEN_VERSION, address(mockToken), owner);
 
-        // Give users some tokens
+        // Mint tokens to users
         mockToken.mint(user1, 1000 * 10 ** 18);
         mockToken.mint(user2, 1000 * 10 ** 18);
     }
@@ -40,12 +40,12 @@ contract WrapperTest is Test {
     // ============ Deployment Tests ============
 
     function test_Deployment() public view {
-        assertEq(wrapper.realToken(), address(mockToken));
-        assertEq(wrapper.owner(), owner);
-        assertFalse(wrapper.paused());
-        assertEq(wrapper.name(), "Wrapper Test Token");
-        assertEq(wrapper.symbol(), "WTEST");
-        assertEq(wrapper.decimals(), 18);
+        assertEq(adapter.underlyingToken(), address(mockToken));
+        assertEq(adapter.owner(), owner);
+        assertFalse(adapter.paused());
+        assertEq(adapter.name(), "Wrapper Test Token");
+        assertEq(adapter.symbol(), "WTEST");
+        assertEq(adapter.decimals(), 18);
     }
 
     // ============ Transfer Tests ============
@@ -53,13 +53,13 @@ contract WrapperTest is Test {
     function test_Transfer_Success() public {
         uint256 amount = 100 * 10 ** 18;
 
-        // user1 approves wrapper
+        // user1 approves adapter
         vm.prank(user1);
-        mockToken.approve(address(wrapper), amount);
+        mockToken.approve(address(adapter), amount);
 
         // user1 transfers to user2
         vm.prank(user1);
-        bool success = wrapper.transfer(user2, amount);
+        bool success = adapter.transfer(user2, amount);
 
         assertTrue(success);
         assertEq(mockToken.balanceOf(user2), 1000 * 10 ** 18 + amount);
@@ -73,7 +73,7 @@ contract WrapperTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(GaslessAdapterBase.UnderlyingInsufficientAllowance.selector, user1, 0, amount)
         );
-        assertFalse(wrapper.transfer(user2, amount), "Transfer should revert when insufficient allowance");
+        adapter.transfer(user2, amount);
     }
 
     function test_Transfer_WhenPaused() public {
@@ -81,16 +81,16 @@ contract WrapperTest is Test {
 
         // user1 approves
         vm.prank(user1);
-        mockToken.approve(address(wrapper), amount);
+        mockToken.approve(address(adapter), amount);
 
         // owner pauses contract
         vm.prank(owner);
-        wrapper.pause();
+        adapter.pause();
 
-        // transfer should fail
+        // Transfer should fail
         vm.prank(user1);
         vm.expectRevert();
-        assertFalse(wrapper.transfer(user2, amount), "Transfer should revert when paused");
+        adapter.transfer(user2, amount);
     }
 
     // ============ TransferFrom Tests ============
@@ -100,18 +100,18 @@ contract WrapperTest is Test {
 
         // user1 approves spender
         vm.prank(user1);
-        wrapper.approve(spender, amount);
+        adapter.approve(spender, amount);
 
-        // user1 approves underlying token to wrapper
+        // user1 approves underlying token to adapter
         vm.prank(user1);
-        mockToken.approve(address(wrapper), amount);
+        mockToken.approve(address(adapter), amount);
 
         // spender transfers on behalf of user1
         vm.prank(spender);
-        bool success = wrapper.transferFrom(user1, user2, amount);
+        bool success = adapter.transferFrom(user1, user2, amount);
 
         assertTrue(success);
-        assertEq(wrapper.allowance(user1, spender), 0);
+        assertEq(adapter.allowance(user1, spender), 0);
         assertEq(mockToken.balanceOf(user2), 1000 * 10 ** 18 + amount);
     }
 
@@ -123,7 +123,7 @@ contract WrapperTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(GaslessAdapterBase.ERC20InsufficientAllowance.selector, spender, 0, amount)
         );
-        assertFalse(wrapper.transferFrom(user1, user2, amount), "TransferFrom should revert");
+        adapter.transferFrom(user1, user2, amount);
     }
 
     // ============ Approve Tests ============
@@ -132,24 +132,24 @@ contract WrapperTest is Test {
         uint256 amount = 100 * 10 ** 18;
 
         vm.prank(user1);
-        bool success = wrapper.approve(spender, amount);
+        bool success = adapter.approve(spender, amount);
 
         assertTrue(success);
-        assertEq(wrapper.allowance(user1, spender), amount);
+        assertEq(adapter.allowance(user1, spender), amount);
     }
 
     function test_Approve_ZeroAddress() public {
         vm.prank(user1);
         vm.expectRevert(abi.encodeWithSelector(GaslessAdapterBase.ERC20InvalidSpender.selector, address(0)));
-        wrapper.approve(address(0), 100 * 10 ** 18);
+        adapter.approve(address(0), 100 * 10 ** 18);
     }
 
-    // ============ Permit Tests ============
+    // ============ Permit Tests (ERC2612) ============
 
     function test_Permit_Success() public {
         uint256 amount = 100 * 10 ** 18;
         uint256 deadline = block.timestamp + 1 days;
-        uint256 nonce = wrapper.nonces(user1);
+        uint256 nonce = adapter.nonces(user1);
 
         bytes32 structHash = keccak256(
             abi.encode(
@@ -162,21 +162,21 @@ contract WrapperTest is Test {
             )
         );
 
-        bytes32 hash = wrapper.DOMAIN_SEPARATOR();
+        bytes32 hash = adapter.DOMAIN_SEPARATOR();
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", hash, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(user1PrivateKey, digest);
 
-        wrapper.permit(user1, spender, amount, deadline, v, r, s);
+        adapter.permit(user1, spender, amount, deadline, v, r, s);
 
-        assertEq(wrapper.allowance(user1, spender), amount);
-        assertEq(wrapper.nonces(user1), nonce + 1);
+        assertEq(adapter.allowance(user1, spender), amount);
+        assertEq(adapter.nonces(user1), nonce + 1);
     }
 
     function test_Permit_ExpiredDeadline() public {
         uint256 amount = 100 * 10 ** 18;
-        uint256 deadline = block.timestamp - 1; // expired
-        uint256 nonce = wrapper.nonces(user1);
+        uint256 deadline = block.timestamp - 1; // Expired
+        uint256 nonce = adapter.nonces(user1);
 
         bytes32 structHash = keccak256(
             abi.encode(
@@ -189,123 +189,124 @@ contract WrapperTest is Test {
             )
         );
 
-        bytes32 hash = wrapper.DOMAIN_SEPARATOR();
+        bytes32 hash = adapter.DOMAIN_SEPARATOR();
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", hash, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(user1PrivateKey, digest);
 
         vm.expectRevert(abi.encodeWithSelector(ERC2612.ERC2612ExpiredSignature.selector, deadline));
-        wrapper.permit(user1, spender, amount, deadline, v, r, s);
+        adapter.permit(user1, spender, amount, deadline, v, r, s);
     }
 
-    // ============ EIP-3009 TransferWithAuthorization Tests ============
+    // ============ ERC3009 TransferWithAuthorization Tests ============
 
     function test_TransferWithAuthorization_Success() public {
         uint256 amount = 100 * 10 ** 18;
-        uint256 validAfter = block.timestamp - 1; // ensure it's already valid
+        uint256 validAfter = block.timestamp - 1; // Ensure it's already valid
         uint256 validBefore = block.timestamp + 1 days;
         bytes32 nonce = keccak256("unique-nonce-1");
 
-        // user1 approves underlying token to wrapper
+        // user1 approves underlying token to adapter
         vm.prank(user1);
-        mockToken.approve(address(wrapper), amount);
+        mockToken.approve(address(adapter), amount);
 
-        // create authorization signature
+        // Create authorization signature
         bytes32 structHash = keccak256(
             abi.encode(
-                wrapper.TRANSFER_WITH_AUTHORIZATION_TYPEHASH(), user1, user2, amount, validAfter, validBefore, nonce
+                adapter.TRANSFER_WITH_AUTHORIZATION_TYPEHASH(), user1, user2, amount, validAfter, validBefore, nonce
             )
         );
 
-        bytes32 hash = wrapper.DOMAIN_SEPARATOR();
+        bytes32 hash = adapter.DOMAIN_SEPARATOR();
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", hash, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(user1PrivateKey, digest);
 
-        // execute authorized transfer
-        wrapper.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
+        // Execute authorized transfer
+        adapter.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
 
-        assertTrue(wrapper.authorizationState(user1, nonce));
+        assertTrue(adapter.authorizationState(user1, nonce));
         assertEq(mockToken.balanceOf(user2), 1000 * 10 ** 18 + amount);
     }
 
     function test_TransferWithAuthorization_ReuseNonce() public {
         uint256 amount = 100 * 10 ** 18;
-        uint256 validAfter = block.timestamp - 1; // ensure it's already valid
+        uint256 validAfter = block.timestamp - 1; // Ensure it's already valid
         uint256 validBefore = block.timestamp + 1 days;
         bytes32 nonce = keccak256("unique-nonce-2");
 
         vm.prank(user1);
-        mockToken.approve(address(wrapper), amount * 2);
+        mockToken.approve(address(adapter), amount * 2);
 
         bytes32 structHash = keccak256(
             abi.encode(
-                wrapper.TRANSFER_WITH_AUTHORIZATION_TYPEHASH(), user1, user2, amount, validAfter, validBefore, nonce
+                adapter.TRANSFER_WITH_AUTHORIZATION_TYPEHASH(), user1, user2, amount, validAfter, validBefore, nonce
             )
         );
 
-        bytes32 hash = wrapper.DOMAIN_SEPARATOR();
+        bytes32 hash = adapter.DOMAIN_SEPARATOR();
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", hash, structHash));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(user1PrivateKey, digest);
 
-        // first use should succeed
-        wrapper.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
+        // First use should succeed
+        adapter.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
 
-        // second use with same nonce should fail
+        // Second use with same nonce should fail
         vm.expectRevert("ERC3009: authorization is used or canceled");
-        wrapper.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
+        adapter.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
     }
 
     // ============ Pause/Unpause Tests ============
 
     function test_Pause_OnlyOwner() public {
         vm.prank(owner);
-        wrapper.pause();
+        adapter.pause();
 
-        assertTrue(wrapper.paused());
+        assertTrue(adapter.paused());
     }
 
     function test_Pause_NotOwner() public {
         vm.prank(user1);
         vm.expectRevert();
-        wrapper.pause();
+        adapter.pause();
     }
 
     function test_Unpause_Success() public {
         vm.prank(owner);
-        wrapper.pause();
+        adapter.pause();
 
-        assertTrue(wrapper.paused());
+        assertTrue(adapter.paused());
 
         vm.prank(owner);
-        wrapper.unpause();
+        adapter.unpause();
 
-        assertFalse(wrapper.paused());
+        assertFalse(adapter.paused());
     }
 
     function test_Unpause_NotOwner() public {
         vm.prank(owner);
-        wrapper.pause();
+        adapter.pause();
 
         vm.prank(user1);
         vm.expectRevert();
-        wrapper.unpause();
+        adapter.unpause();
     }
 
     // ============ View Function Tests ============
 
     function test_BalanceOf() public view {
-        assertEq(wrapper.balanceOf(user1), 1000 * 10 ** 18);
-        assertEq(wrapper.balanceOf(user2), 1000 * 10 ** 18);
+        assertEq(adapter.balanceOf(user1), 1000 * 10 ** 18);
+        assertEq(adapter.balanceOf(user2), 1000 * 10 ** 18);
     }
 
     function test_TotalSupply() public view {
-        assertEq(wrapper.totalSupply(), mockToken.totalSupply());
+        assertEq(adapter.totalSupply(), mockToken.totalSupply());
     }
 
     function test_DomainSeparator() public view {
-        bytes32 domainSeparator = wrapper.DOMAIN_SEPARATOR();
+        bytes32 domainSeparator = adapter.DOMAIN_SEPARATOR();
         assertNotEq(domainSeparator, bytes32(0));
     }
 }
+

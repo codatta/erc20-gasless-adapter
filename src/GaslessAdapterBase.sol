@@ -11,9 +11,18 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 /**
  * @title GaslessAdapterBase
- * @notice Base contract combining ERC3009 and ERC2612 functionality
- * @dev This contract implements IERC20 and IERC20Metadata interfaces
- *      Subclasses must implement: transfer, transferFrom, balanceOf, totalSupply, name, symbol, decimals, _transfer
+ * @notice Generic base contract that adds ERC3009 and ERC2612 capability on top of any standard ERC20.
+ * @dev
+ * - This contract exposes a full ERC20 + ERC20Metadata interface to integrators.
+ * - It wires in ERC2612 (permit) and ERC3009 (gasless transfer) using a shared EIP712 domain.
+ * - The actual token balance and totalSupply are always read from an underlying ERC20.
+ *
+ * To integrate a new ERC20:
+ * - Deploy a small adapter contract that inherits {GaslessAdapterBase}.
+ * - Implement `_getUnderlyingToken()` to return the underlying ERC20 address.
+ * - Optionally override `_requireNotPaused()` (e.g. by inheriting {Pausable}) to add pause control.
+ *
+ * Subclasses must implement: transfer, transferFrom, balanceOf, totalSupply, name, symbol, decimals, _transfer
  */
 abstract contract GaslessAdapterBase is EIP712, ERC3009, ERC2612, IERC20Metadata {
     using SafeERC20 for IERC20;
