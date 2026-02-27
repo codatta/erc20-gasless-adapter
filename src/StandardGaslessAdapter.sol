@@ -16,26 +16,36 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * This contract can be used directly via the factory, or as a template for custom adapters.
  * Any standard IERC20 + IERC20Metadata token can be used as the underlying token.
  */
-contract StandardGaslessAdapter is GaslessAdapterBase, Ownable, Pausable {
+ contract StandardGaslessAdapter is GaslessAdapterBase, Ownable, Pausable {
     /// @notice Address of the underlying ERC20 token that this adapter wraps.
-    address public underlyingToken;
+    address private _underlyingToken;
+
+    /// @dev Error thrown when the underlying token address is zero.
+    error StandardGaslessAdapterInvalidUnderlyingToken();
+
+    /// @dev Error thrown when the initial owner address is zero.
+    error StandardGaslessAdapterInvalidInitialOwner();
 
     /**
      * @notice Deploy a new gasless adapter for a specific underlying ERC20 token.
-     * @param tokenName     EIP712 domain name used for ERC2612 / ERC3009 signatures (visible to wallets).
-     * @param tokenVersion  EIP712 domain version string.
-     * @param _underlyingToken Address of the underlying ERC20 token implementing IERC20 & IERC20Metadata.
-     * @param initialOwner  Address that will receive ownership (can pause/unpause via {Pausable}).
+     * @param tokenName       EIP712 domain name used for ERC2612 / ERC3009 signatures (visible to wallets).
+     * @param tokenVersion    EIP712 domain version string.
+     * @param underlyingToken_ Address of the underlying ERC20 token implementing IERC20 & IERC20Metadata.
+     * @param initialOwner    Address that will receive ownership (can pause/unpause via {Pausable}).
      */
     constructor(
         string memory tokenName,
         string memory tokenVersion,
-        address _underlyingToken,
+        address underlyingToken_,
         address initialOwner
     ) GaslessAdapterBase(tokenName, tokenVersion) Ownable(initialOwner) {
-        require(_underlyingToken != address(0), "StandardGaslessAdapter: underlyingToken cannot be the zero address");
-        require(initialOwner != address(0), "StandardGaslessAdapter: initialOwner cannot be the zero address");
-        underlyingToken = _underlyingToken;
+        if (underlyingToken_ == address(0)) {
+            revert StandardGaslessAdapterInvalidUnderlyingToken();
+        }
+        if (initialOwner == address(0)) {
+            revert StandardGaslessAdapterInvalidInitialOwner();
+        }
+        _underlyingToken = underlyingToken_;
     }
 
     /**
@@ -43,7 +53,7 @@ contract StandardGaslessAdapter is GaslessAdapterBase, Ownable, Pausable {
      *      Any standard ERC20 can be used as the underlying implementation.
      */
     function _getUnderlyingToken() internal view override returns (address) {
-        return underlyingToken;
+        return _underlyingToken;
     }
 
     /**

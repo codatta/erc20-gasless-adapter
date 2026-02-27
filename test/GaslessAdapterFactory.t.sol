@@ -57,12 +57,14 @@ contract GaslessAdapterFactoryTest is Test {
     }
 
     function test_DeployAdapter_ZeroUnderlyingToken() public {
-        vm.expectRevert("GaslessAdapterFactory: underlyingToken cannot be zero");
+        vm.expectRevert(
+            abi.encodeWithSelector(GaslessAdapterFactory.GaslessAdapterFactoryUnderlyingTokenZero.selector)
+        );
         factory.deployAdapter(address(0), TOKEN_NAME, TOKEN_VERSION, owner);
     }
 
     function test_DeployAdapter_ZeroOwner() public {
-        vm.expectRevert("GaslessAdapterFactory: owner cannot be zero");
+        vm.expectRevert(abi.encodeWithSelector(GaslessAdapterFactory.GaslessAdapterFactoryOwnerZero.selector));
         factory.deployAdapter(address(mockToken), TOKEN_NAME, TOKEN_VERSION, address(0));
     }
 
@@ -70,7 +72,11 @@ contract GaslessAdapterFactoryTest is Test {
         // Deploy a contract that doesn't implement IERC20Metadata
         address invalidToken = address(new MockERC20WithoutMetadata());
 
-        vm.expectRevert("GaslessAdapterFactory: underlyingToken must implement IERC20Metadata");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                GaslessAdapterFactory.GaslessAdapterFactoryUnderlyingTokenNotIERC20Metadata.selector
+            )
+        );
         factory.deployAdapter(invalidToken, TOKEN_NAME, TOKEN_VERSION, owner);
     }
 

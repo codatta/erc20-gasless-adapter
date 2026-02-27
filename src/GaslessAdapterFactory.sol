@@ -32,6 +32,21 @@ contract GaslessAdapterFactory {
     mapping(address => address) private _underlyingTokenByAdapter;
 
     /**
+     * @dev Error thrown when the underlying token address is zero.
+     */
+    error GaslessAdapterFactoryUnderlyingTokenZero();
+
+    /**
+     * @dev Error thrown when the adapter owner address is zero.
+     */
+    error GaslessAdapterFactoryOwnerZero();
+
+    /**
+     * @dev Error thrown when the underlying token does not implement IERC20Metadata.
+     */
+    error GaslessAdapterFactoryUnderlyingTokenNotIERC20Metadata();
+
+    /**
      * @notice Deploy a new gasless adapter for an underlying ERC20 token.
      * @param underlyingToken Address of the underlying ERC20 token (must implement IERC20 & IERC20Metadata).
      * @param tokenName EIP712 domain name (e.g., "MyToken Adapter" or "MyToken").
@@ -45,19 +60,23 @@ contract GaslessAdapterFactory {
         string memory tokenVersion,
         address owner
     ) external returns (address adapter) {
-        require(underlyingToken != address(0), "GaslessAdapterFactory: underlyingToken cannot be zero");
-        require(owner != address(0), "GaslessAdapterFactory: owner cannot be zero");
+        if (underlyingToken == address(0)) {
+            revert GaslessAdapterFactoryUnderlyingTokenZero();
+        }
+        if (owner == address(0)) {
+            revert GaslessAdapterFactoryOwnerZero();
+        }
 
         // Verify that the underlying token implements IERC20Metadata
         // This will revert if the token doesn't have name(), symbol(), or decimals()
         try IERC20Metadata(underlyingToken).name() returns (string memory) {} catch {
-            revert("GaslessAdapterFactory: underlyingToken must implement IERC20Metadata");
+            revert GaslessAdapterFactoryUnderlyingTokenNotIERC20Metadata();
         }
         try IERC20Metadata(underlyingToken).symbol() returns (string memory) {} catch {
-            revert("GaslessAdapterFactory: underlyingToken must implement IERC20Metadata");
+            revert GaslessAdapterFactoryUnderlyingTokenNotIERC20Metadata();
         }
         try IERC20Metadata(underlyingToken).decimals() returns (uint8) {} catch {
-            revert("GaslessAdapterFactory: underlyingToken must implement IERC20Metadata");
+            revert GaslessAdapterFactoryUnderlyingTokenNotIERC20Metadata();
         }
 
         // Deploy the standard adapter

@@ -29,6 +29,31 @@ abstract contract ERC3009 is IERC3009 {
     mapping(address => mapping(bytes32 => bool)) private _authorizationStates;
 
     /**
+     * @dev Error thrown when the caller is not the expected payee.
+     */
+    error ERC3009CallerMustBePayee(address caller, address expectedPayee);
+
+    /**
+     * @dev Error thrown when a signature is invalid.
+     */
+    error ERC3009InvalidSignature();
+
+    /**
+     * @dev Error thrown when an authorization has already been used or canceled.
+     */
+    error ERC3009AuthorizationUsedOrCanceled(address authorizer, bytes32 nonce);
+
+    /**
+     * @dev Error thrown when an authorization is not yet valid.
+     */
+    error ERC3009AuthorizationNotYetValid(uint256 validAfter, uint256 currentTime);
+
+    /**
+     * @dev Error thrown when an authorization has expired.
+     */
+    error ERC3009AuthorizationExpired(uint256 validBefore, uint256 currentTime);
+
+    /**
      * @notice Returns the state of an authorization
      * @dev Nonces are randomly generated 32-byte data unique to the
      * authorizer's address
@@ -179,7 +204,9 @@ abstract contract ERC3009 is IERC3009 {
         bytes32 nonce,
         bytes memory signature
     ) internal {
-        require(to == msg.sender, "ERC3009: caller must be the payee");
+        if (to != msg.sender) {
+            revert ERC3009CallerMustBePayee(msg.sender, to);
+        }
         _requireValidAuthorization(from, nonce, validAfter, validBefore);
         _requireValidSignature(
             from,
@@ -231,10 +258,10 @@ abstract contract ERC3009 is IERC3009 {
      * @param signature     Signature byte array produced by an EOA wallet or a contract wallet
      */
     function _requireValidSignature(address signer, bytes32 dataHash, bytes memory signature) private view {
-        require(
-            SignatureChecker.isValidSignatureNow(signer, _hashTypedDataV4(dataHash), signature),
-            "ERC3009: invalid signature"
-        );
+        bool isValid = SignatureChecker.isValidSignatureNow(signer, _hashTypedDataV4(dataHash), signature);
+        if (!isValid) {
+            revert ERC3009InvalidSignature();
+        }
     }
 
     /**
@@ -243,7 +270,9 @@ abstract contract ERC3009 is IERC3009 {
      * @param nonce         Nonce of the authorization
      */
     function _requireUnusedAuthorization(address authorizer, bytes32 nonce) private view {
-        require(!_authorizationStates[authorizer][nonce], "ERC3009: authorization is used or canceled");
+        if (_authorizationStates[authorizer][nonce]) {
+            revert ERC3009AuthorizationUsedOrCanceled(authorizer, nonce);
+        }
     }
 
     /**
@@ -257,8 +286,12 @@ abstract contract ERC3009 is IERC3009 {
         private
         view
     {
-        require(block.timestamp > validAfter, "ERC3009: authorization is not yet valid");
-        require(block.timestamp < validBefore, "ERC3009: authorization is expired");
+        if (block.timestamp <= validAfter) {
+            revert ERC3009AuthorizationNotYetValid(validAfter, block.timestamp);
+        }
+        if (block.timestamp >= validBefore) {
+            revert ERC3009AuthorizationExpired(validBefore, block.timestamp);
+        }
         _requireUnusedAuthorization(authorizer, nonce);
     }
 

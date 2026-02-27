@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {StandardGaslessAdapter} from "../src/StandardGaslessAdapter.sol";
 import {GaslessAdapterBase} from "../src/GaslessAdapterBase.sol";
 import {ERC2612} from "../src/ERC2612.sol";
+import {ERC3009} from "../src/ERC3009.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract StandardGaslessAdapterTest is Test {
@@ -253,7 +254,9 @@ contract StandardGaslessAdapterTest is Test {
         adapter.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
 
         // Second use with same nonce should fail
-        vm.expectRevert("ERC3009: authorization is used or canceled");
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC3009.ERC3009AuthorizationUsedOrCanceled.selector, user1, nonce)
+        );
         adapter.transferWithAuthorization(user1, user2, amount, validAfter, validBefore, nonce, v, r, s);
     }
 

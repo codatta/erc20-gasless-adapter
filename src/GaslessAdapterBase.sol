@@ -8,6 +8,7 @@ import {ERC2612} from "./ERC2612.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC3009Adapter} from "./interface/IERC3009Adapter.sol";
 
 /**
  * @title GaslessAdapterBase
@@ -24,7 +25,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
  *
  * Subclasses must implement: transfer, transferFrom, balanceOf, totalSupply, name, symbol, decimals, _transfer
  */
-abstract contract GaslessAdapterBase is EIP712, ERC3009, ERC2612, IERC20Metadata {
+abstract contract GaslessAdapterBase is EIP712, ERC3009, ERC2612, IERC20Metadata, IERC3009Adapter {
     using SafeERC20 for IERC20;
 
     mapping(address account => mapping(address spender => uint256)) private _allowances;
@@ -38,6 +39,14 @@ abstract contract GaslessAdapterBase is EIP712, ERC3009, ERC2612, IERC20Metadata
      * @dev Get the underlying token address - must be implemented by subclasses
      */
     function _getUnderlyingToken() internal view virtual returns (address);
+
+    /**
+     * @notice Public getter for the underlying token address.
+     * @return The address of the underlying ERC20 token.
+     */
+    function underlyingToken() external view virtual returns (address) {
+        return _getUnderlyingToken();
+    }
 
     /**
      * @dev Hook to check if transfers should be paused - can be overridden by subclasses
@@ -123,13 +132,13 @@ abstract contract GaslessAdapterBase is EIP712, ERC3009, ERC2612, IERC20Metadata
      */
     function transfer(address to, uint256 amount) external virtual returns (bool) {
         _requireNotPaused();
-        address underlyingToken = _getUnderlyingToken();
-        uint256 allowanceUnderlying = IERC20(underlyingToken).allowance(msg.sender, address(this));
+        address underlying = _getUnderlyingToken();
+        uint256 allowanceUnderlying = IERC20(underlying).allowance(msg.sender, address(this));
         if (allowanceUnderlying < amount) {
             revert UnderlyingInsufficientAllowance(msg.sender, allowanceUnderlying, amount);
         }
 
-        IERC20(underlyingToken).safeTransferFrom(msg.sender, to, amount);
+        IERC20(underlying).safeTransferFrom(msg.sender, to, amount);
         return true;
     }
 
@@ -189,13 +198,13 @@ abstract contract GaslessAdapterBase is EIP712, ERC3009, ERC2612, IERC20Metadata
      */
     function _transfer(address from, address to, uint256 value) internal virtual override(ERC3009) {
         _requireNotPaused();
-        address underlyingToken = _getUnderlyingToken();
-        uint256 allowanceUnderlying = IERC20(underlyingToken).allowance(from, address(this));
+        address underlying = _getUnderlyingToken();
+        uint256 allowanceUnderlying = IERC20(underlying).allowance(from, address(this));
         if (allowanceUnderlying < value) {
             revert UnderlyingInsufficientAllowance(from, allowanceUnderlying, value);
         }
 
-        IERC20(underlyingToken).safeTransferFrom(from, to, value);
+        IERC20(underlying).safeTransferFrom(from, to, value);
     }
 }
 

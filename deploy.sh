@@ -1,1 +1,2 @@
-forge script script/XNYAdapter.s.sol:XNYAdapterDeploy --rpc-url https://sepolia.base.org --broadcast
+forge script script/GaslessAdapterFactory.s.sol:GaslessAdapterFactoryDeploy --rpc-url https://sepolia.base.org --broadcast
+forge script script/DeployAdapterViaFactory.s.sol:DeployAdapterViaFactory --rpc-url https://sepolia.base.org --broadcast
