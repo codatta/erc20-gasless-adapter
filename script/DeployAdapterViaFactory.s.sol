@@ -34,6 +34,13 @@ contract DeployAdapterViaFactory is Script {
         console.log("Adapter deployed at:", adapter);
         console.log("Underlying token:", underlyingToken);
         console.log("Owner:", owner);
+
+        string memory root = vm.projectRoot();
+        string memory deployPoolPath = string.concat(root, "/script/deploymentAdapter.json");
+        if (vm.exists(deployPoolPath)) {
+            vm.removeFile(deployPoolPath);
+        }
+        vm.writeFile(deployPoolPath, vm.serializeAddress("", "adapter", address(adapter)));
     }
 }
 
